@@ -1,0 +1,39 @@
+let
+    // Definição da função para fazer a requisição HTTP
+    Requisicao = (numeroPagina) =>
+        let
+            // Fazendo a requisição e obtendo o conteúdo JSON
+            ConteudoJson = try Json.Document(Web.Contents("http://localhost:8080/medicos", [Query = [page = Text.From(numeroPagina)]])) otherwise null
+        in
+            ConteudoJson,
+
+    // Obtendo o número total de páginas de médicos
+    TotalPaginas = Requisicao(1)[totalPages],
+
+    // Lista de dados de todos os médicos em todas as páginas
+    ListaDados = List.Generate(
+        ()=> [ Pagina = 0, Consulta = try Requisicao(0)[content] otherwise null],
+        each [Pagina] < TotalPaginas,
+        each [Consulta = Requisicao([Pagina]+1)[content], Pagina = [Pagina]+1],
+        each [Consulta]
+    ),
+
+    // Transformação da lista de dados em uma tabela
+    Tabela = Table.TransformColumns(
+        Table.ExpandRecordColumn(
+            Table.ExpandListColumn(
+                Table.FromList(ListaDados, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+                "Column1"
+            ),
+            "Column1",
+            {"id", "nome", "email", "crm", "especialidade"},
+            {"id", "nome", "email", "crm", "especialidade"}
+        ),
+        // Transformando o nome em UTF-8 para resolver problemas de codificação
+        {
+            "nome",
+            each Text.FromBinary(Text.ToBinary(_, 1252), TextEncoding.Utf8)
+        }
+    )
+in
+    Tabela
